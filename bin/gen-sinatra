@@ -1,0 +1,239 @@
+#!/usr/bin/env ruby
+
+$: << File.expand_path(File.dirname(__FILE__) + "/../lib")
+require "boilerplate"
+require "boilerplate/cli"
+
+base_name, opts = Boilerplate.parse_args!
+
+sinatra = Boilerplate.new(base_name, DATA) do
+  
+  folder(project_name) {
+    file('app.rb')
+    file('Capfile')
+    file('Rakefile')
+    file('config.ru')
+    folder('db') {
+      folder('migrations') {
+        file('001_initial_schema.rb')
+      }
+    }
+    folder('lib') {
+      folder(project_name) {
+        file('controllers.rb')
+        file('models.rb')
+        file('helpers.rb')
+        file('test_helper.rb')
+      }
+      file('project_name.rb', :filename=>"#{project_name}.rb")
+    }
+    folder('public') {
+      folder('theme') {
+        folder('styles') {
+          file('main.css')
+        }
+        folder('scripts')
+        folder('images')
+      }
+    }
+    folder('views') {
+      file('layout.erb', :erb=>false)
+      file('index.erb', :erb=>false)
+    }
+    folder('vendor') {
+      gem_unpack('sinatra', :as=>'sinatra')
+      gem_unpack('sequel', :as=>'sinatra')
+      file('paths.rb', :include=>['sinatra', 'sequel'])
+    }
+    folder('test') {
+      file('test_project_name.rb', :filename=>"test_#{project_name}.rb")
+    }
+  }
+
+end
+
+sinatra.execute(opts)
+
+__END__
+---
+controllers.rb: |
+  get '/' do
+    erb :index
+  end
+
+app.rb: |
+  require 'rubygems'
+  require File.join(File.dirname(__FILE__), 'vendor', 'paths.rb') unless defined?(APP_ROOT)
+  require 'sinatra'
+  require 'sequel'
+  
+  unless Sinatra.application.reloading?
+    DB = Sequel.sqlite( local_path( 'db', '<%= project_name %>.db.sqlite3' ) )
+    current_version = Sequel::Migrator.get_current_migration_version(DB)
+    latest_version = Sequel::Migrator.apply(DB, local_path("db","migrations") )
+    puts 'Migrations loaded!' if current_version < latest_version
+  end
+  
+  set :public, 'public'
+  set :views,  'views'
+  
+  require '<%= project_name %>'
+  
+  helpers do
+    include Helpers
+    include Rack::Utils
+    alias_method :h, :escape_html
+  end
+
+project_name.rb: |
+  require '<%= project_name %>/helpers'
+  require '<%= project_name %>/models'
+  require '<%= project_name %>/controllers'
+  
+
+models.rb: |
+  # Your Sequel models here...
+  # class ModelName < Sequel::Model ; end
+  
+index.erb: |
+  <p>Hello! Welcome to <%= project_name %></p>
+
+main.css: |
+  BODY {
+    font-family: "lucida grande", "tahoma", sans-serif;
+  }
+
+paths.rb: |
+  APP_ROOT = File.expand_path(File.dirname(__FILE__)) unless defined?(APP_ROOT)
+  
+  def local_path(*args)
+    File.join(APP_ROOT, *args)
+  end
+  
+  # Add local lib directory to load path...
+  $:.unshift local_path('lib', '<%= project_name %>')
+  
+  # Add vendored directories to load path...
+  $:.unshift local_path('vendor', 'sinatra', 'lib')
+  $:.unshift local_path('vendor', 'sequel', 'lib')
+  
+
+Rakefile: |
+  require 'rubygems'
+  require 'rake'
+  require 'vendor/paths'
+
+  namespace :<%= project_name %> do
+
+    desc "Setup"
+    task :setup do
+      puts "I don't do anything yet..."
+    end
+
+  end
+
+layout.erb: |
+  <html lang="en" xml:lang="en" xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+      <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
+      <title>Welcome</title>
+    </head>
+    <body>
+      <%= yield %>
+    </body>
+  </html>
+  
+
+test_project_name.rb: |
+  require 'test_helper'
+
+  class <%= project_name.capitalize %>Test < Test::Unit::TestCase
+
+    context "<%= project_name.capitalize %>" do
+
+      context "get /" do
+        setup do
+          get_it '/'
+        end
+
+        should "respond" do
+          assert @response.body
+        end
+      end
+
+    end
+
+  end
+
+test_helper.rb: |
+  require 'rubygems'
+  $:.unshift File.join(File.dirname(__FILE__), '..', 'vendor', 'sinatra', 'lib')
+  $:.unshift File.join(File.dirname(__FILE__), '..', 'vendor', 'sequel', 'lib')
+  require 'sinatra'
+  require 'sinatra/test/unit'
+  require 'shoulda'
+  require File.join(File.dirname(__FILE__), '..', 'app.rb')
+
+helpers.rb: |
+  module Helpers
+    def short_date(date)
+      date.strftime('%m/%d/%Y')
+    end
+  end
+
+Capfile: |
+  load 'deploy' if respond_to?(:namespace) # cap2 differentiator
+
+  default_run_options[:pty] = true
+
+  # be sure to change these
+  set :user, 'username'
+  set :domain, 'yourdomain.com'
+  set :application, '<%= project_name %>'
+
+  # the rest should be good
+  set :repository,  "#{user}@#{domain}:git/#{application}.git" 
+  set :deploy_to, "/home/#{user}/#{domain}"
+  set :deploy_via, :remote_cache
+  set :scm, 'git'
+  set :branch, 'master'
+  set :git_shallow_clone, 1
+  set :scm_verbose, true
+  set :use_sudo, false
+
+  server domain, :app, :web
+
+  namespace :deploy do
+    task :restart do
+      run "touch #{current_path}/tmp/restart.txt" 
+    end
+  end
+
+config.ru: |
+  require 'rubygems'
+  require File.join(File.dirname(__FILE__), 'vendor', 'paths.rb')
+  require local_path('app.rb')
+
+  Sinatra::Application.default_options.merge!(
+    :run   => false,
+    :env   => ENV.fetch('RACK_ENV', :production),
+    :views => local_path('views'),
+    :public => local_path('public')
+  )
+
+  run Sinatra.application
+
+001_initial_schema.rb: |
+  class InitialSchema < Sequel::Migration
+    def up
+      create_table :table_name do
+        primary_key :id
+        datetime :created_at
+        datetime :updated_at
+      end
+    end
+
+    def down
+      drop_table :table_name
+    end
+  end

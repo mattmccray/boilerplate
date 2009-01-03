@@ -1,0 +1,11 @@
+Changes
+Manifest
+Rakefile
+Readme.markdown
+bin/boilerplate
+boilerplate.gemspec
+lib/boilerplate.rb
+lib/boilerplate/cli.rb
+lib/boilerplate/version.rb
+test/helper.rb
+test/test_boilerplate.rb

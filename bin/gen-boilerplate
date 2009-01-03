@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+
+#
+# Generates the source for a boilerplate from a template folder/file structure on the filesystem...
+#
+
+puts "Coming soon..."

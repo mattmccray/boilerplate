@@ -1,0 +1,199 @@
+#!/usr/bin/env ruby
+
+$: << File.expand_path(File.dirname(__FILE__) + "/../lib")
+require "boilerplate"
+require "boilerplate/cli"
+
+base_name, opts = Boilerplate.parse_args!
+
+newgem = Boilerplate::Builder.new(base_name, DATA) do
+  folder(base_name) {
+    folder('bin') {
+      file('bin_file', :filename=>"#{project_name}")
+    }
+    folder('lib') {
+      folder(base_name) {
+        file('cli.rb')
+        file('version.rb')
+      }
+      file('project_name.rb', :filename=>"#{project_name}.rb")
+    }
+    folder('test') {
+      file('helper.rb')
+      file('test_project_name.rb', :filename=>"test_#{project_name}.rb")
+    }
+    file('Readme.markdown')
+    file('Rakefile')
+    file('Changes')
+    file('Manifest')
+    file('project_name.gemspec', :filename=>"#{project_name}.gemspec")
+    file('gitignore', :filename=>".gitignore")
+  }
+end
+
+newgem.execute(opts)
+
+__END__
+---
+Manifest: |
+  # Populate this file by running rake manifest:create
+
+Readme.markdown: |
+  # <%= project_title %>
+  
+  Fill out some info about the project here...
+  
+
+Rakefile: |
+  $: << 'lib'
+  require 'rake'
+  require 'rake/testtask'
+  require 'rake/gempackagetask'
+  require '<%= project_name %>/version'
+  
+  spec = Gem::Specification.new do |s|
+    s.platform = Gem::Platform::RUBY
+    s.summary = "DESCRIPTION"
+    s.name = '<%= project_name %>'
+    s.version = <%= project_module %>::VERSION
+    s.author = 'AUTHOR'
+    s.email = 'EMAIL'
+    s.homepage = 'HOMEPAGE'
+    
+    # s.requirements << 'rake'
+    s.require_path = 'lib'
+    s.autorequire = 'rake'
+    s.files = File.read("Manifest").split
+    s.executables = s.files.grep(/bin/) { |f| File.basename(f) }
+    s.description = <<EOF
+  YOUR DESCRIPTION HERE
+  EOF
+  end
+  
+  Rake::GemPackageTask.new(spec) do |pkg|
+    pkg.need_zip = true
+    pkg.need_tar = true
+  end
+  
+  Rake::TestTask.new do |t|
+    t.libs << 'test'
+    t.test_files = FileList['test/test*.rb']
+    t.verbose = false
+  end
+  
+  task :default=>:test
+  
+  namespace :gem do
+    desc "Create the gemspec file"
+    task :spec do
+      File.open("<%= project_name %>.gemspec", "w") do |file|
+        file.puts spec.to_ruby
+      end
+    end
+  end
+  
+  desc 'Clean up'
+  task :clean => :clobber_package do
+    %w(diff diff email ri *.gem **/*~ .DS_Store).each do |pattern|
+      files = Dir[pattern]
+      rm_rf files unless files.empty?
+    end
+  end
+  
+  namespace :manifest do
+    desc "Verify the manifest"
+    task :check => :clean do
+      f = "Manifest.tmp"
+      require 'find'
+      files = []
+      Find.find '.' do |path|
+        next unless File.file? path
+        next if path =~ /\.git|tmp$|\.DS_Store/
+        files << path[2..-1]
+      end
+      files = files.sort.join "\n"
+      File.open f, 'w' do |fp| fp.puts files end
+      system "diff -du Manifest #{f}"
+      rm f
+    end
+    
+    desc "Create the manifest"
+    task :create => :clean do
+      f = "Manifest"
+      require 'find'
+      files = []
+      Find.find '.' do |path|
+        next unless File.file? path
+        next if path =~ /\.git|tmp$|\.DS_Store/
+        files << path[2..-1]
+      end
+      files = files.sort.join "\n"
+      File.open f, 'w' do |fp| fp.puts files end
+    end
+  end
+
+Changes: |
+  # Populate this file by git log > Changes
+  
+
+test_project_name.rb: |
+  require 'helper'
+  
+  class <%= project_module %>Test < Test::Unit::TestCase
+    
+    context "<%= project_title %>" do
+      
+      setup do
+        # Some setup stuff here...
+      end
+      
+      should "create tests" do
+        assert false, "Implement your tests!!"
+      end
+      
+    end
+    
+  end
+
+bin_file: |
+  #!/usr/bin/env ruby
+  
+  $: << File.expand_path(File.dirname(__FILE__) + "/../lib")
+  require "<%= project_name %>"
+  require "<%= project_name %>/cli"
+  
+  <%= project_module %>::CLI.run(ARGV)
+
+helper.rb: |
+  require 'rubygems'
+  require 'test/unit'
+  require 'shoulda'
+  $:.unshift File.join(File.dirname(__FILE__), '..', 'lib')
+  require '<%= project_name %>'
+
+project_name.gemspec: |
+  # Populate this file by running rake gem:spec
+  
+
+project_name.rb: |
+  require '<%= project_name %>/version'
+
+cli.rb: |
+  module <%= project_module %>
+    class CLI
+      class << self
+        def run(args)
+          puts "<%= project_title %> command line interface... Done."
+        end
+      end
+    end
+  end
+
+version.rb: |
+  module <%= project_module %>
+    VERSION = "0.1"
+  end
+
+gitignore: |
+  .DS_Store
+  pkg
